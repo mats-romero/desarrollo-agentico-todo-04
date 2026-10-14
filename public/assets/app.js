@@ -72,6 +72,11 @@ document.addEventListener("submit", function (event) {
       // El puntero puede haber desaparecido; el arrastre sigue con document.
     }
 
+    var selection = window.getSelection && window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      selection.removeAllRanges();
+    }
+
     var all = tasksOf(list);
     var itemRect = item.getBoundingClientRect();
     var listRect = list.getBoundingClientRect();
@@ -301,6 +306,9 @@ document.addEventListener("submit", function (event) {
       return;
     }
 
+    // Evita los eventos de ratón de compatibilidad, pero no basta para impedir
+    // la selección de texto: eso lo hacen el CSS (user-select) y los listeners
+    // de selectstart y dragstart.
     event.preventDefault();
     drag = {
       item: item,
@@ -357,4 +365,16 @@ document.addEventListener("submit", function (event) {
   });
 
   window.addEventListener("blur", cancel);
+
+  document.addEventListener("selectstart", function (event) {
+    if (drag) {
+      event.preventDefault();
+    }
+  });
+
+  document.addEventListener("dragstart", function (event) {
+    if (drag) {
+      event.preventDefault();
+    }
+  });
 })();

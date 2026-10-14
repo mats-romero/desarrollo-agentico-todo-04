@@ -458,6 +458,8 @@ input:focus-visible {
 
   .task-list .task {
     cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
