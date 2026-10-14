@@ -119,6 +119,59 @@ h1 {
   list-style: none;
 }
 
+.task-group + .task-group {
+  margin-top: 1.75rem;
+}
+
+.task-group:not(:has(.task)) {
+  display: none;
+}
+
+.task-group-title {
+  margin: 0 0 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.task-list .task {
+  position: relative;
+  background: #ffffff;
+}
+
+.task-list.is-sorting .task:not(.is-dragging) {
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.task.is-dragging {
+  z-index: 10;
+  cursor: grabbing;
+  border-radius: 8px;
+  border-bottom-color: transparent;
+  box-shadow: 0 12px 28px rgba(40, 40, 38, 0.18), 0 2px 6px rgba(40, 40, 38, 0.10);
+  transition: box-shadow 150ms ease;
+  will-change: transform;
+}
+
+.task.is-dragging.is-dropping {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease;
+  box-shadow: none;
+}
+
+body.is-dragging-task {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-dragging-task .task-list .task {
+  cursor: grabbing;
+}
+
+body.is-dragging-task .task-list .task-actions {
+  opacity: 0;
+}
+
 .task {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -401,6 +454,12 @@ input:focus-visible {
   .task:hover .task-actions,
   .task:focus-within .task-actions {
     opacity: 1;
+  }
+
+  .task-list .task {
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
