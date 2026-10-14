@@ -1,0 +1,3 @@
+add_column("tasks", "position", "integer", {"default": 0})
+
+sql("UPDATE tasks SET position = ranked.rn - 1 FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY completed ORDER BY created_at ASC, id ASC) AS rn FROM tasks) AS ranked WHERE tasks.id = ranked.id")

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -9,18 +10,31 @@ import (
 	"github.com/gobuffalo/buffalo"
 	"github.com/gobuffalo/pop/v6"
 	"github.com/gobuffalo/validate/v3"
+	"github.com/gofrs/uuid"
 )
+
+// setTaskList carga las tareas y deja en el contexto la lista completa y sus
+// dos bloques (pendientes y completadas).
+func setTaskList(c buffalo.Context, tx *pop.Connection) error {
+	tasks, err := models.LoadTasks(tx)
+	if err != nil {
+		return err
+	}
+
+	c.Set("tasks", tasks)
+	c.Set("pendingTasks", tasks.Pending())
+	c.Set("completedTasks", tasks.Completed())
+	return nil
+}
 
 // TasksIndex muestra la lista de tareas y el formulario de creación.
 func TasksIndex(c buffalo.Context) error {
 	tx := c.Value("tx").(*pop.Connection)
 
-	tasks := models.Tasks{}
-	if err := tx.Order("created_at asc, id asc").All(&tasks); err != nil {
+	if err := setTaskList(c, tx); err != nil {
 		return err
 	}
 
-	c.Set("tasks", tasks)
 	c.Set("task", &models.Task{})
 	c.Set("errors", validate.NewErrors())
 	return c.Render(http.StatusOK, r.HTML("tasks/index.plush.html"))
@@ -36,18 +50,22 @@ func TasksCreate(c buffalo.Context) error {
 	}
 	task.Title = strings.TrimSpace(task.Title)
 
+	position, err := models.TopPosition(tx, false)
+	if err != nil {
+		return err
+	}
+	task.Position = position
+
 	verrs, err := tx.ValidateAndCreate(task)
 	if err != nil {
 		return err
 	}
 
 	if verrs.HasAny() {
-		tasks := models.Tasks{}
-		if err := tx.Order("created_at asc, id asc").All(&tasks); err != nil {
+		if err := setTaskList(c, tx); err != nil {
 			return err
 		}
 
-		c.Set("tasks", tasks)
 		c.Set("task", task)
 		c.Set("errors", verrs)
 		return c.Render(http.StatusUnprocessableEntity, r.HTML("tasks/index.plush.html"))
@@ -112,11 +130,55 @@ func TasksToggle(c buffalo.Context) error {
 	}
 
 	task.Completed = !task.Completed
+	position, err := models.TopPosition(tx, task.Completed)
+	if err != nil {
+		return err
+	}
+	task.Position = position
 	if err := tx.Update(task); err != nil {
 		return err
 	}
 
 	return c.Redirect(http.StatusSeeOther, "/")
+}
+
+// TasksReorder guarda el nuevo orden de las tareas de un bloque.
+func TasksReorder(c buffalo.Context) error {
+	tx := c.Value("tx").(*pop.Connection)
+
+	req := c.Request()
+	if err := req.ParseForm(); err != nil {
+		return c.Error(http.StatusUnprocessableEntity, err)
+	}
+
+	block := req.PostForm.Get("block")
+	if block != "pending" && block != "completed" {
+		return c.Error(http.StatusUnprocessableEntity, errors.New("bloque no válido"))
+	}
+
+	rawIDs := req.PostForm["ids"]
+	ids := make([]uuid.UUID, 0, len(rawIDs))
+	seen := make(map[uuid.UUID]bool, len(rawIDs))
+	for _, raw := range rawIDs {
+		id, err := uuid.FromString(raw)
+		if err != nil {
+			return c.Error(http.StatusUnprocessableEntity, err)
+		}
+		if seen[id] {
+			return c.Error(http.StatusUnprocessableEntity, errors.New("ids repetidos"))
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+
+	if err := models.ReorderTasks(tx, block == "completed", ids); err != nil {
+		if errors.Is(err, models.ErrReorderMismatch) {
+			return c.Error(http.StatusConflict, err)
+		}
+		return err
+	}
+
+	return c.Render(http.StatusNoContent, nil)
 }
 
 // TasksDestroy elimina una tarea.
